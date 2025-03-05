@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Code Generator</title>
+    <title>DataMatrix Generator</title>
     
-    <!-- QR Code library - 100% совместима с iOS Safari -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- JSBarcode + bwip-js для Data Matrix -->
+    <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js-min.js"></script>
     
     <style>
         * {
@@ -34,6 +34,7 @@
             justify-content: center;
             padding: 20px;
             text-align: center;
+            background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
         }
         
         #app-container {
@@ -43,17 +44,21 @@
             flex-direction: column;
             align-items: center;
             background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+            padding: 25px;
             margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.6);
         }
         
         h1 {
             color: #333;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             margin-top: 0;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         p {
@@ -67,13 +72,25 @@
             display: flex;
             justify-content: center;
             margin: 20px 0;
-            padding: 15px;
+            padding: 20px;
             background-color: #f8f9fa;
-            border-radius: 8px;
+            border-radius: 15px;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
+            position: relative;
         }
         
-        #qrcode {
+        #code-container:before {
+            content: "📱";
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 24px;
+        }
+        
+        #datamatrix-container {
             margin: 0 auto;
+            display: flex;
+            justify-content: center;
         }
         
         #current-code {
@@ -82,43 +99,59 @@
             font-size: 14px;
             background-color: #f0f0f0;
             padding: 12px;
-            border-radius: 8px;
+            border-radius: 12px;
             word-break: break-all;
             text-align: center;
             margin-bottom: 15px;
+            border: 1px dashed #ddd;
         }
         
         #timer {
-            color: #888;
-            font-size: 0.85rem;
-            margin-top: 10px;
-            padding: 5px 12px;
+            color: #444;
+            font-size: 0.9rem;
+            margin-top: 12px;
+            padding: 6px 14px;
             background-color: #f0f0f0;
-            border-radius: 12px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
         }
         
         #controls {
             width: 100%;
             display: flex;
             justify-content: center;
-            margin-top: 15px;
+            margin-top: 20px;
         }
         
         button {
-            background-color: #4285f4;
+            background: linear-gradient(145deg, #3b82f6, #2563eb);
             color: white;
             border: none;
             border-radius: 50px;
-            padding: 12px 24px;
+            padding: 12px 28px;
             font-size: 1rem;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
             -webkit-appearance: none;
             appearance: none;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.1s ease;
         }
         
         button:active {
-            background-color: #3367d6;
+            transform: scale(0.98);
+            background: linear-gradient(145deg, #2563eb, #1d4ed8);
+        }
+        
+        .emoji {
+            font-size: 1.2em;
+            vertical-align: middle;
         }
         
         @media (max-width: 480px) {
@@ -141,43 +174,56 @@
             -webkit-user-select: none;
             user-select: none;
         }
+        
+        .pulse {
+            animation: pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
     </style>
 </head>
 <body class="no-select" ontouchmove="event.preventDefault()">
     <div id="app-container">
-        <h1>Code Generator</h1>
-        <p>Refreshes automatically every 2 seconds</p>
+        <h1><span class="emoji">🔄</span> DataMatrix Generator</h1>
+        <p>Обновляется автоматически каждые 1.6 секунды</p>
         
         <div id="code-container">
-            <div id="qrcode"></div>
+            <canvas id="datamatrix-container"></canvas>
         </div>
         
         <div id="current-code"></div>
-        <div id="timer">Next update in 2 seconds</div>
+        <div id="timer"><span class="emoji pulse">⏱️</span> <span id="countdown-text">Обновление через 1.6 сек</span></div>
         
         <div id="controls">
-            <button id="refresh-button" ontouchstart="">Generate New Code</button>
+            <button id="refresh-button" ontouchstart=""><span class="emoji">✨</span> Сгенерировать новый код</button>
         </div>
     </div>
     
     <script>
-        // Base part of the code that remains constant - includes everything except the last 5 chars
+        // Базовая часть кода, которая остается постоянной
         const baseCode = "0104810223038676210OMk76G193GzNm";
-        // Track previously generated suffix codes to avoid duplicates
+        // Отслеживание использованных суффиксов для избежания дубликатов
         const usedSuffixes = new Set();
         let timerInterval;
         let countdownInterval;
-        let seconds = 2;
+        let timer = 1.6; // 1.6 секунды между обновлениями
+        let remaining = timer;
         let isRunning = true;
-        let qrcode;
         
-        // Function to generate a random alphanumeric character
+        // Функция для генерации случайного буквенно-цифрового символа
         function getRandomChar() {
             const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
             return chars.charAt(Math.floor(Math.random() * chars.length));
         }
         
-        // Function to generate a unique 5-character suffix
+        // Функция для генерации уникального 5-символьного суффикса
         function generateUniqueSuffix() {
             let suffix;
             do {
@@ -196,54 +242,60 @@
             return suffix;
         }
         
-        // Функция генерации QR-кода
+        // Функция генерации Data Matrix кода
         function generateCode() {
             const suffix = generateUniqueSuffix();
             const completeCode = baseCode + suffix;
             
-            // Display the current code
+            // Отображение текущего кода
             document.getElementById('current-code').textContent = completeCode;
             
-            // Reset countdown timer
-            seconds = 2;
-            document.getElementById('timer').textContent = 'Next update in 2 seconds';
+            // Сброс таймера обратного отсчета
+            remaining = timer;
+            updateCountdownText();
             
-            // Если QR-код уже существует, обновляем его, иначе создаем новый
-            if (qrcode) {
-                qrcode.clear();
-                qrcode.makeCode(completeCode);
-            } else {
-                // Создаем новый QR-код
-                qrcode = new QRCode(document.getElementById("qrcode"), {
-                    text: completeCode,
-                    width: 200,
-                    height: 200,
-                    colorDark: "#000000",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H // Высокий уровень коррекции ошибок
+            // Создание Data Matrix кода
+            try {
+                let canvas = document.getElementById('datamatrix-container');
+                bwipjs.toCanvas(canvas, {
+                    bcid: 'datamatrix',      // Barcode type
+                    text: completeCode,      // Text to encode
+                    scale: 3,                // Scale factor
+                    padding: 0,              // Padding in modules
+                    includetext: false,      // No text
+                    backgroundcolor: 'ffffff' // White background
                 });
+            } catch (e) {
+                console.error(e);
             }
         }
         
-        // Function to start the timer and countdown
+        // Функция обновления отображения обратного отсчета
+        function updateCountdownText() {
+            const seconds = Math.ceil(remaining * 10) / 10;
+            document.getElementById('countdown-text').textContent = 
+                `Обновление через ${seconds.toFixed(1)} сек`;
+        }
+        
+        // Функция запуска таймеров
         function startTimers() {
             if (timerInterval) clearInterval(timerInterval);
             if (countdownInterval) clearInterval(countdownInterval);
             
             isRunning = true;
             
-            // Update the code every 2 seconds
-            timerInterval = setInterval(generateCode, 2000);
+            // Обновление кода каждые timer секунд
+            timerInterval = setInterval(generateCode, timer * 1000);
             
-            // Countdown timer for UI
+            // Таймер обратного отсчета для UI
             countdownInterval = setInterval(function() {
-                seconds--;
-                if (seconds <= 0) seconds = 2;
-                document.getElementById('timer').textContent = `Next update in ${seconds} second${seconds !== 1 ? 's' : ''}`;
-            }, 1000);
+                remaining -= 0.1;
+                if (remaining <= 0) remaining = timer;
+                updateCountdownText();
+            }, 100);
         }
         
-        // Handle page visibility changes to save battery
+        // Обработка изменений видимости страницы для экономии батареи
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
                 if (timerInterval) clearInterval(timerInterval);
@@ -257,7 +309,7 @@
             }
         });
         
-        // Handle manual refresh button
+        // Обработка кнопки обновления
         document.getElementById('refresh-button').addEventListener('click', function() {
             if (timerInterval) clearInterval(timerInterval);
             if (countdownInterval) clearInterval(countdownInterval);
@@ -266,7 +318,7 @@
             startTimers();
         });
         
-        // Also handle touchend for better mobile experience
+        // Также обработка touchend для лучшего мобильного опыта
         document.getElementById('refresh-button').addEventListener('touchend', function(e) {
             e.preventDefault();
             
@@ -277,17 +329,16 @@
             startTimers();
         });
         
-        // Initialize app
-        // Initialize app
+        // Инициализация приложения
         document.addEventListener('DOMContentLoaded', function() {
             generateCode();
             startTimers();
         });
         
-        // Backup initialization
+        // Резервная инициализация
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             setTimeout(function() {
-                if (!document.getElementById('qrcode').hasChildNodes()) {
+                if (!document.getElementById('datamatrix-container').getContext) {
                     generateCode();
                     startTimers();
                 }

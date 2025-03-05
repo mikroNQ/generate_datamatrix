@@ -8,7 +8,7 @@
     <title>DataMatrix Generator</title>
     
     <!-- JSBarcode + bwip-js для Data Matrix -->
-    <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js-min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js.min.js"></script>
     
     <style>
         * {
@@ -195,7 +195,7 @@
         <p>Обновляется автоматически каждые 1.6 секунды</p>
         
         <div id="code-container">
-            <canvas id="datamatrix-container"></canvas>
+            <div id="datamatrix-container"></div>
         </div>
         
         <div id="current-code"></div>
@@ -254,19 +254,37 @@
             remaining = timer;
             updateCountdownText();
             
-            // Создание Data Matrix кода
+            // Создание Data Matrix кода - более надежный способ
             try {
-                let canvas = document.getElementById('datamatrix-container');
+                const container = document.getElementById('datamatrix-container');
+                // Очищаем контейнер
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+                
+                // Создаем новый canvas с помощью bwip-js
+                const canvas = document.createElement('canvas');
+                
+                // Создаем DataMatrix
                 bwipjs.toCanvas(canvas, {
-                    bcid: 'datamatrix',      // Barcode type
-                    text: completeCode,      // Text to encode
-                    scale: 3,                // Scale factor
-                    padding: 0,              // Padding in modules
-                    includetext: false,      // No text
+                    bcid: 'datamatrix',       // Barcode type
+                    text: completeCode,       // Text to encode
+                    scale: 3,                 // Scale factor
+                    padding: 0,               // Padding in modules
+                    includetext: false,       // No text
                     backgroundcolor: 'ffffff' // White background
+                }, function(err, cvs) {
+                    if (err) {
+                        console.error(err);
+                    } else {
+                        container.appendChild(cvs);
+                    }
                 });
             } catch (e) {
-                console.error(e);
+                console.error("Error generating DataMatrix:", e);
+                // Резервный вариант - показать ошибку на странице
+                const container = document.getElementById('datamatrix-container');
+                container.innerHTML = '<div style="color:red">Ошибка создания кода: ' + e.message + '</div>';
             }
         }
         
@@ -329,21 +347,11 @@
             startTimers();
         });
         
-        // Инициализация приложения
-        document.addEventListener('DOMContentLoaded', function() {
+        // Инициализация приложения при полной загрузке страницы
+        window.addEventListener('load', function() {
             generateCode();
             startTimers();
         });
-        
-        // Резервная инициализация
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(function() {
-                if (!document.getElementById('datamatrix-container').getContext) {
-                    generateCode();
-                    startTimers();
-                }
-            }, 1);
-        }
     </script>
 </body>
 </html>

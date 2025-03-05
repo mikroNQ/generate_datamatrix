@@ -7,8 +7,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>DataMatrix Generator</title>
     
-    <!-- JSBarcode + bwip-js для Data Matrix -->
-    <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js.min.js"></script>
+    <!-- bwip-js для Data Matrix (полная версия) -->
+    <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js-min.js"></script>
     
     <style>
         * {
@@ -91,6 +91,8 @@
             margin: 0 auto;
             display: flex;
             justify-content: center;
+            align-items: center;
+            min-height: 150px;
         }
         
         #current-code {
@@ -242,7 +244,25 @@
             return suffix;
         }
         
-        // Функция генерации Data Matrix кода
+        // Функция для определения библиотеки bwip-js
+        function getBwipObject() {
+            // Проверяем глобальный объект bwipjs
+            if (typeof bwipjs !== 'undefined') {
+                return bwipjs;
+            }
+            // Проверяем window.bwipjs
+            else if (typeof window.bwipjs !== 'undefined') {
+                return window.bwipjs;
+            }
+            // Проверяем BWIPJS (старая версия)
+            else if (typeof BWIPJS !== 'undefined') {
+                return BWIPJS;
+            }
+            // В последнем случае, если не нашли, бросаем ошибку
+            throw new Error('BWIP-JS library not found!');
+        }
+        
+        // Функция генерации Data Matrix кода, которая работает в обоих браузерах
         function generateCode() {
             const suffix = generateUniqueSuffix();
             const completeCode = baseCode + suffix;
@@ -254,37 +274,67 @@
             remaining = timer;
             updateCountdownText();
             
-            // Создание Data Matrix кода - более надежный способ
             try {
-                const container = document.getElementById('datamatrix-container');
+                // Получаем объект bwip-js
+                const bwipJsObject = getBwipObject();
+                
                 // Очищаем контейнер
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
+                const container = document.getElementById('datamatrix-container');
+                container.innerHTML = '';
                 
-                // Создаем новый canvas с помощью bwip-js
+                // Создаем новый canvas
                 const canvas = document.createElement('canvas');
+                container.appendChild(canvas);
                 
-                // Создаем DataMatrix
-                bwipjs.toCanvas(canvas, {
-                    bcid: 'datamatrix',       // Barcode type
-                    text: completeCode,       // Text to encode
-                    scale: 3,                 // Scale factor
-                    padding: 0,               // Padding in modules
-                    includetext: false,       // No text
-                    backgroundcolor: 'ffffff' // White background
-                }, function(err, cvs) {
-                    if (err) {
-                        console.error(err);
-                    } else {
-                        container.appendChild(cvs);
+                // Настройки для datamatrix
+                const options = {
+                    bcid: 'datamatrix',       // Тип штрих-кода
+                    text: completeCode,       // Текст для кодирования
+                    scale: 3,                 // Масштаб
+                    padding: 0,               // Отступы в модулях
+                    includetext: false,       // Без текста
+                    backgroundcolor: 'ffffff' // Белый фон
+                };
+                
+                // Попытка 1: Использовать метод toCanvas с колбэком (работает в Chrome)
+                try {
+                    bwipJsObject.toCanvas(canvas, options, function(err) {
+                        if (err) {
+                            console.error("Error in callback: ", err);
+                            fallbackRendering(completeCode, container);
+                        }
+                    });
+                } catch(e) {
+                    // Попытка 2: Использовать синхронный метод (работает в Safari)
+                    try {
+                        bwipJsObject.toCanvas(canvas, options);
+                    } catch(e2) {
+                        console.error("Both rendering methods failed:", e, e2);
+                        fallbackRendering(completeCode, container);
                     }
-                });
+                }
             } catch (e) {
                 console.error("Error generating DataMatrix:", e);
-                // Резервный вариант - показать ошибку на странице
                 const container = document.getElementById('datamatrix-container');
                 container.innerHTML = '<div style="color:red">Ошибка создания кода: ' + e.message + '</div>';
+            }
+        }
+        
+        // Запасной метод рендеринга, если основные методы не сработали
+        function fallbackRendering(completeCode, container) {
+            try {
+                container.innerHTML = '';
+                const img = document.createElement('img');
+                // Использование онлайн-сервиса для генерации DataMatrix
+                img.src = `https://bwipjs-api.metafloor.com/?bcid=datamatrix&text=${encodeURIComponent(completeCode)}&scale=3&includetext=false&backgroundcolor=ffffff`;
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                img.onerror = function() {
+                    container.innerHTML = '<div style="color:red">Не удалось загрузить изображение кода</div>';
+                };
+                container.appendChild(img);
+            } catch (e) {
+                container.innerHTML = '<div style="color:red">Не удалось создать код: ' + e.message + '</div>';
             }
         }
         
@@ -347,11 +397,19 @@
             startTimers();
         });
         
-        // Инициализация приложения при полной загрузке страницы
-        window.addEventListener('load', function() {
+        // Функция инициализации, которая запускается после загрузки страницы
+        function init() {
             generateCode();
             startTimers();
-        });
+        }
+        
+        // Если страница уже загружена
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(init, 100);
+        } else {
+            // Иначе ждем загрузку
+            window.addEventListener('load', init);
+        }
     </script>
 </body>
 </html>

@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>DataMatrix Generator</title>
     
-    <!-- bwip-js для Data Matrix (полная версия) -->
+    <!-- bwip-js для Data Matrix -->
     <script src="https://cdn.jsdelivr.net/npm/bwip-js@3.2.2/dist/bwip-js-min.js"></script>
     
     <style>
@@ -93,6 +93,13 @@
             justify-content: center;
             align-items: center;
             min-height: 150px;
+            width: 100%;
+            max-width: 200px; /* Ограничение ширины для мобильных устройств */
+        }
+        
+        #datamatrix-container canvas {
+            max-width: 100%;
+            height: auto;
         }
         
         #current-code {
@@ -262,7 +269,7 @@
             throw new Error('BWIP-JS library not found!');
         }
         
-        // Функция генерации Data Matrix кода, которая работает в обоих браузерах
+        // Функция генерации Data Matrix кода
         function generateCode() {
             const suffix = generateUniqueSuffix();
             const completeCode = baseCode + suffix;
@@ -284,9 +291,14 @@
                 
                 // Создаем новый canvas
                 const canvas = document.createElement('canvas');
+                
+                // Устанавливаем размеры canvas (важно для мобильных устройств)
+                canvas.width = 150; 
+                canvas.height = 150;
+                
                 container.appendChild(canvas);
                 
-                // Настройки для datamatrix
+                // Настройки для DataMatrix
                 const options = {
                     bcid: 'datamatrix',       // Тип штрих-кода
                     text: completeCode,       // Текст для кодирования
@@ -296,33 +308,19 @@
                     backgroundcolor: 'ffffff' // Белый фон
                 };
                 
-                // Попытка 1: Использовать метод toCanvas с колбэком (работает в Chrome)
-                try {
-                    bwipJsObject.toCanvas(canvas, options, function(err) {
-                        if (err) {
-                            console.error("Error in callback: ", err);
-                            fallbackRendering(completeCode, container);
-                        }
-                    });
-                } catch(e) {
-                    // Попытка 2: Использовать синхронный метод (работает в Safari)
-                    try {
-                        bwipJsObject.toCanvas(canvas, options);
-                    } catch(e2) {
-                        console.error("Both rendering methods failed:", e, e2);
-                        fallbackRendering(completeCode, container);
-                    }
-                }
+                // Используем синхронный метод, который должен работать во всех браузерах
+                bwipJsObject.toCanvas(canvas, options);
+                
             } catch (e) {
-                console.error("Error generating DataMatrix:", e);
-                const container = document.getElementById('datamatrix-container');
-                container.innerHTML = '<div style="color:red">Ошибка создания кода: ' + e.message + '</div>';
+                console.error("Ошибка генерации DataMatrix:", e);
+                fallbackRendering(completeCode);
             }
         }
         
-        // Запасной метод рендеринга, если основные методы не сработали
-        function fallbackRendering(completeCode, container) {
+        // Запасной метод рендеринга, если основной метод не сработал
+        function fallbackRendering(completeCode) {
             try {
+                const container = document.getElementById('datamatrix-container');
                 container.innerHTML = '';
                 const img = document.createElement('img');
                 // Использование онлайн-сервиса для генерации DataMatrix
@@ -334,6 +332,7 @@
                 };
                 container.appendChild(img);
             } catch (e) {
+                const container = document.getElementById('datamatrix-container');
                 container.innerHTML = '<div style="color:red">Не удалось создать код: ' + e.message + '</div>';
             }
         }
@@ -397,17 +396,19 @@
             startTimers();
         });
         
-        // Функция инициализации, которая запускается после загрузки страницы
+        // Функция инициализации приложения
         function init() {
-            generateCode();
-            startTimers();
+            setTimeout(function() {
+                generateCode();
+                startTimers();
+            }, 100); // Небольшая задержка для уверенности, что библиотека загружена
         }
         
-        // Если страница уже загружена
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(init, 100);
+        // Если документ уже готов, инициализируем приложение
+        if (document.readyState === 'complete') {
+            init();
         } else {
-            // Иначе ждем загрузку
+            // Иначе ждем полной загрузки страницы
             window.addEventListener('load', init);
         }
     </script>
